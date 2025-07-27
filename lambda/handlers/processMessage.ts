@@ -1,22 +1,16 @@
-import { SQSEvent } from 'aws-lambda';
-import {
-  BedrockRuntimeClient,
-  InvokeModelCommand,
-} from '@aws-sdk/client-bedrock-runtime';
-import {
-  S3Client,
-  PutObjectCommand,
-} from '@aws-sdk/client-s3';
+import { SQSEvent } from "aws-lambda";
+import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
-const bedrock = new BedrockRuntimeClient({ region: 'us-east-1' });
-const s3 = new S3Client({ region: 'us-east-1' });
+const bedrock = new BedrockRuntimeClient({ region: "us-east-1" });
+const s3 = new S3Client({ region: "us-east-1" });
 
-const MODEL_ID = 'anthropic.claude-3-5-sonnet-20240620-v1:0';
+const MODEL_ID = "anthropic.claude-3-5-sonnet-20240620-v1:0";
 const BUCKET_NAME = process.env.BUCKET_NAME;
 
 if (!BUCKET_NAME) {
-  console.error('BUCKET_NAME environment variable is not set.');
-  throw new Error('Missing required environment variable BUCKET_NAME.');
+  console.error("BUCKET_NAME environment variable is not set.");
+  throw new Error("Missing required environment variable BUCKET_NAME.");
 }
 
 export const handler = async (event: SQSEvent): Promise<void> => {
@@ -24,13 +18,13 @@ export const handler = async (event: SQSEvent): Promise<void> => {
 
   for (const record of event.Records) {
     try {
-      console.log('🔎 Processing record:', record.messageId);
+      console.log("🔎 Processing record:", record.messageId);
       const { prompt, sessionId } = JSON.parse(record.body);
 
       console.log(`📝 Prompt: ${prompt}`);
       console.log(`🆔 Session ID: ${sessionId}`);
 
-      const systemPrompt = `
+const systemPrompt = `
 You are a professional web designer and helpful assistant.
 
 Your task is to generate a complete, beautiful, responsive one-page website using only HTML and CSS.
@@ -41,7 +35,8 @@ Requirements:
 - Include good spacing, color contrast, and mobile optimization
 - Use embedded <style> tags in the <head> for CSS
 - Use a Google Font (e.g., Inter, Roboto, Poppins) for styling
-- Use <img> tags with descriptive alt text and realistic images from https://www.pexels.com/photo
+- Use <img> tags with descriptive alt text and direct image URLs (e.g., https://images.pexels.com/...jpg or https://picsum.photos)
+- Do not use placeholder images like placehold.co
 - Begin the code with <!-- START HTML --> and end with <!-- END HTML -->
 
 Current request: "${prompt}"
@@ -49,29 +44,32 @@ Current request: "${prompt}"
 Output only a complete HTML page.
 `.trim();
 
+
       const command = new InvokeModelCommand({
         modelId: MODEL_ID,
-        contentType: 'application/json',
-        accept: 'application/json',
+        contentType: "application/json",
+        accept: "application/json",
         body: JSON.stringify({
-          anthropic_version: 'bedrock-2023-05-31',
+          anthropic_version: "bedrock-2023-05-31",
           messages: [
             {
-              role: 'user',
+              role: "user",
               content: systemPrompt,
             },
           ],
           max_tokens: 20000,
           temperature: 0.7,
-          stop_sequences: ['<!-- END HTML -->'],
+          stop_sequences: ["<!-- END HTML -->"],
         }),
       });
 
-      console.log('📡 Sending prompt to Bedrock...');
+      console.log("📡 Sending prompt to Bedrock...");
       const response = await bedrock.send(command);
       const rawBody = await response.body.transformToString();
       const parsed = JSON.parse(rawBody);
-      const html = parsed.content?.[0]?.text ?? 'No output received.';
+      const fullText = parsed.content?.[0]?.text ?? "";
+      const htmlStartIndex = fullText.indexOf("<!-- START HTML -->");
+      const html = htmlStartIndex >= 0 ? fullText.slice(htmlStartIndex) : fullText;
 
       console.log(`HTML generated (length: ${html.length} chars)`);
 
@@ -83,13 +81,13 @@ Output only a complete HTML page.
           Bucket: BUCKET_NAME,
           Key: s3Key,
           Body: html,
-          ContentType: 'text/html',
+          ContentType: "text/html",
         })
       );
 
       console.log(`Upload complete for session: ${sessionId}`);
     } catch (err) {
-      console.error('Error processing message:', JSON.stringify(err, null, 2));
+      console.error("Error processing message:", JSON.stringify(err, null, 2));
     }
   }
 };
