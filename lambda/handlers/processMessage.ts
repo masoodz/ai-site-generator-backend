@@ -18,11 +18,11 @@ export const handler = async (event: SQSEvent): Promise<void> => {
 
   for (const record of event.Records) {
     try {
-      console.log("🔎 Processing record:", record.messageId);
+      console.log("Processing record:", record.messageId);
       const { prompt, sessionId } = JSON.parse(record.body);
 
-      console.log(`📝 Prompt: ${prompt}`);
-      console.log(`🆔 Session ID: ${sessionId}`);
+      console.log(`Prompt: ${prompt}`);
+      console.log(`Session ID: ${sessionId}`);
 
 const systemPrompt = `
 You are a professional web designer and helpful assistant.
