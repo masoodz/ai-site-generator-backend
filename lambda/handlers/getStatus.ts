@@ -1,8 +1,24 @@
 import { APIGatewayProxyHandler } from "aws-lambda";
-import { S3Client, HeadObjectCommand } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  GetObjectCommand,
+  HeadObjectCommand,
+} from "@aws-sdk/client-s3";
+import { Readable } from "stream";
 
 const s3 = new S3Client({ region: "us-east-1" });
 const BUCKET_NAME = process.env.BUCKET_NAME!;
+
+function streamToString(stream: Readable): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunks: Uint8Array[] = [];
+    stream.on("data", (chunk) => chunks.push(chunk));
+    stream.on("error", reject);
+    stream.on("end", () =>
+      resolve(Buffer.concat(chunks).toString("utf-8"))
+    );
+  });
+}
 
 export const handler: APIGatewayProxyHandler = async (event) => {
   if (event.httpMethod === "OPTIONS") {
@@ -27,17 +43,19 @@ export const handler: APIGatewayProxyHandler = async (event) => {
         "Access-Control-Allow-Headers": "*",
         "Access-Control-Allow-Methods": "OPTIONS,POST,GET",
       },
-      body: "Missing sessionId",
+      body: JSON.stringify({ error: "Missing sessionId" }),
     };
   }
 
+  const key = `${sessionId}.html`;
+
   try {
-    await s3.send(
-      new HeadObjectCommand({
-        Bucket: BUCKET_NAME,
-        Key: `${sessionId}.html`,
-      })
-    );
+    // Check existence
+    await s3.send(new HeadObjectCommand({ Bucket: BUCKET_NAME, Key: key }));
+
+    // Retrieve file
+    const result = await s3.send(new GetObjectCommand({ Bucket: BUCKET_NAME, Key: key }));
+    const html = await streamToString(result.Body as Readable);
 
     return {
       statusCode: 200,
@@ -45,8 +63,9 @@ export const handler: APIGatewayProxyHandler = async (event) => {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Headers": "*",
         "Access-Control-Allow-Methods": "OPTIONS,POST,GET",
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify({ status: "ready" }),
+      body: JSON.stringify({ status: "ready", html }),
     };
   } catch (err: any) {
     if (err.name === "NotFound" || err.$metadata?.httpStatusCode === 404) {
@@ -56,6 +75,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
           "Access-Control-Allow-Origin": "*",
           "Access-Control-Allow-Headers": "*",
           "Access-Control-Allow-Methods": "OPTIONS,POST,GET",
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({ status: "pending" }),
       };
@@ -69,6 +89,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Headers": "*",
         "Access-Control-Allow-Methods": "OPTIONS,POST,GET",
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({ error: "Error checking status" }),
     };
