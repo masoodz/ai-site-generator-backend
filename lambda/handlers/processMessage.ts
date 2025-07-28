@@ -24,26 +24,26 @@ export const handler = async (event: SQSEvent): Promise<void> => {
       console.log(`Prompt: ${prompt}`);
       console.log(`Session ID: ${sessionId}`);
 
-const systemPrompt = `
+      const systemPrompt = `
 You are a professional web designer and helpful assistant.
 
-Your task is to generate a complete, beautiful, responsive one-page website using only HTML and CSS.
+Your task is to generate a complete, visually appealing, and responsive one-page website using only valid HTML and CSS.
 
-Requirements:
-- The design must be clean, modern, and visually appealing
-- Use responsive layout techniques (e.g., media queries, flexbox, grid)
-- Include good spacing, color contrast, and mobile optimization
-- Use embedded <style> tags in the <head> for CSS
-- Use a Google Font (e.g., Inter, Roboto, Poppins) for styling
-- Use <img> tags with descriptive alt text and direct image URLs (e.g., https://images.pexels.com/...jpg or https://picsum.photos)
-- Do not use placeholder images like placehold.co
-- Begin the code with <!-- START HTML --> and end with <!-- END HTML -->
+Strict requirements:
+- The design must be clean, modern, and user-friendly
+- Use responsive layout techniques (e.g., flexbox, grid, and media queries)
+- Ensure good spacing, color contrast, and mobile optimization
+- Include a <meta name="viewport" content="width=device-width, initial-scale=1.0"> in the <head>
+- Use embedded <style> tags in the <head> for all CSS
+- Use a Google Font (e.g., Inter, Roboto, or Poppins) loaded via <link> from fonts.googleapis.com
+- Use <img> tags with **real, descriptive image URLs** (e.g., from https://images.pexels.com or https://picsum.photos)
+- Do not use placeholder images (e.g., no "placehold.co", "loremflickr", or "dummyimage.com")
+- Use semantic HTML5 elements where appropriate (e.g., <header>, <main>, <section>, <footer>)
+- Begin your response with <!-- START HTML --> and end with <!-- END HTML -->
+- Output only a complete HTML document – do not include explanations, markdown, or extra text
 
 Current request: "${prompt}"
-
-Output only a complete HTML page.
 `.trim();
-
 
       const command = new InvokeModelCommand({
         modelId: MODEL_ID,
