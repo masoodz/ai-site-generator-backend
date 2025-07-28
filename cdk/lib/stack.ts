@@ -16,7 +16,22 @@ export class AiSiteGeneratorStack extends cdk.Stack {
     const bucket = new s3.Bucket(this, "GeneratedSitesBucket", {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
+      blockPublicAccess: new s3.BlockPublicAccess({
+        blockPublicAcls: false,
+        blockPublicPolicy: false,
+        ignorePublicAcls: false,
+        restrictPublicBuckets: false,
+      }),
     });
+
+    bucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        actions: ["s3:GetObject"],
+        resources: [`${bucket.bucketArn}/*`],
+        principals: [new iam.AnyPrincipal()],
+        effect: iam.Effect.ALLOW,
+      })
+    );
 
     const siteRequestQueue = new sqs.Queue(this, "SiteRequestQueue", {
       visibilityTimeout: cdk.Duration.seconds(300),
@@ -78,13 +93,17 @@ export class AiSiteGeneratorStack extends cdk.Stack {
       },
     });
 
-    api.root.addResource("generate").addMethod("POST", new apigateway.LambdaIntegration(apiHandler), {
-      authorizationType: apigateway.AuthorizationType.IAM,
-    });
+    api.root
+      .addResource("generate")
+      .addMethod("POST", new apigateway.LambdaIntegration(apiHandler), {
+        authorizationType: apigateway.AuthorizationType.IAM,
+      });
 
-    api.root.addResource("status").addMethod("GET", new apigateway.LambdaIntegration(statusHandler), {
-      authorizationType: apigateway.AuthorizationType.IAM,
-    });
+    api.root
+      .addResource("status")
+      .addMethod("GET", new apigateway.LambdaIntegration(statusHandler), {
+        authorizationType: apigateway.AuthorizationType.IAM,
+      });
 
     api.addGatewayResponse("Default4xxWithCORS", {
       type: apigateway.ResponseType.DEFAULT_4XX,
@@ -105,12 +124,16 @@ export class AiSiteGeneratorStack extends cdk.Stack {
     });
 
     const unauthRole = new iam.Role(this, "UnauthenticatedRole", {
-      assumedBy: new iam.FederatedPrincipal("cognito-identity.amazonaws.com", {
-        StringEquals: { "cognito-identity.amazonaws.com:aud": "IDENTITY_POOL_ID" },
-        "ForAnyValue:StringLike": {
-          "cognito-identity.amazonaws.com:amr": "unauthenticated",
+      assumedBy: new iam.FederatedPrincipal(
+        "cognito-identity.amazonaws.com",
+        {
+          StringEquals: { "cognito-identity.amazonaws.com:aud": "IDENTITY_POOL_ID" },
+          "ForAnyValue:StringLike": {
+            "cognito-identity.amazonaws.com:amr": "unauthenticated",
+          },
         },
-      }, "sts:AssumeRoleWithWebIdentity"),
+        "sts:AssumeRoleWithWebIdentity"
+      ),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName("AmazonAPIGatewayInvokeFullAccess"),
       ],
@@ -120,17 +143,27 @@ export class AiSiteGeneratorStack extends cdk.Stack {
       allowUnauthenticatedIdentities: true,
     });
 
-    const identityPoolRoleAttachment = new cdk.aws_cognito.CfnIdentityPoolRoleAttachment(this, "IdentityPoolRoleAttachment", {
-      identityPoolId: identityPool.ref,
-      roles: {
-        unauthenticated: unauthRole.roleArn,
-      },
-    });
+    const identityPoolRoleAttachment = new cdk.aws_cognito.CfnIdentityPoolRoleAttachment(
+      this,
+      "IdentityPoolRoleAttachment",
+      {
+        identityPoolId: identityPool.ref,
+        roles: {
+          unauthenticated: unauthRole.roleArn,
+        },
+      }
+    );
 
     unauthRole.assumeRolePolicy?.addStatements(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
-        principals: [new iam.FederatedPrincipal("cognito-identity.amazonaws.com", {}, "sts:AssumeRoleWithWebIdentity")],
+        principals: [
+          new iam.FederatedPrincipal(
+            "cognito-identity.amazonaws.com",
+            {},
+            "sts:AssumeRoleWithWebIdentity"
+          ),
+        ],
         actions: ["sts:AssumeRoleWithWebIdentity"],
         conditions: {
           StringEquals: {
