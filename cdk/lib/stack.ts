@@ -33,6 +33,12 @@ export class AiSiteGeneratorStack extends cdk.Stack {
       })
     );
 
+    bucket.addCorsRule({
+      allowedOrigins: ["*"],
+      allowedMethods: [s3.HttpMethods.GET],
+      allowedHeaders: ["*"],
+    });
+
     const siteRequestQueue = new sqs.Queue(this, "SiteRequestQueue", {
       visibilityTimeout: cdk.Duration.seconds(300),
     });
