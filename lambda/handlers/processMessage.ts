@@ -5,7 +5,7 @@ import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 const bedrock = new BedrockRuntimeClient({ region: "us-east-1" });
 const s3 = new S3Client({ region: "us-east-1" });
 
-const MODEL_ID = "anthropic.claude-3-5-sonnet-20240620-v1:0";
+const MODEL_ID = "us.deepseek.r1-v1:0";
 const BUCKET_NAME = process.env.BUCKET_NAME;
 
 if (!BUCKET_NAME) {
@@ -43,6 +43,7 @@ Strict requirements:
 - Output only a complete HTML document – do not include explanations, markdown, or extra text
 
 Current request: "${prompt}"
+Respond only with valid HTML. Do not include explanations or comments outside the HTML.
 `.trim();
 
       const command = new InvokeModelCommand({
@@ -50,28 +51,33 @@ Current request: "${prompt}"
         contentType: "application/json",
         accept: "application/json",
         body: JSON.stringify({
-          anthropic_version: "bedrock-2023-05-31",
-          messages: [
-            {
-              role: "user",
-              content: systemPrompt,
-            },
-          ],
-          max_tokens: 20000,
+          prompt: systemPrompt,
           temperature: 0.7,
-          stop_sequences: ["<!-- END HTML -->"],
+          top_p: 0.9,
+          max_tokens: 8192,
         }),
       });
 
-      console.log("📡 Sending prompt to Bedrock...");
+      console.log("Sending prompt to Bedrock (DeepSeek)...");
       const response = await bedrock.send(command);
       const rawBody = await response.body.transformToString();
-      const parsed = JSON.parse(rawBody);
-      const fullText = parsed.content?.[0]?.text ?? "";
-      const htmlStartIndex = fullText.indexOf("<!-- START HTML -->");
-      const html = htmlStartIndex >= 0 ? fullText.slice(htmlStartIndex) : fullText;
+      console.log("Raw response from DeepSeek:", rawBody);
 
-      console.log(`HTML generated (length: ${html.length} chars)`);
+      const parsed = JSON.parse(rawBody);
+      console.log("Raw response from DeepSeek:", JSON.stringify(parsed, null, 2));
+
+      const fullText = parsed.choices?.[0]?.text ?? "";
+      const htmlStartIndex = fullText.indexOf("<!-- START HTML -->");
+      const htmlEndIndex = fullText.indexOf("<!-- END HTML -->") + "<!-- END HTML -->".length;
+
+      const html =
+        htmlStartIndex >= 0 && htmlEndIndex > htmlStartIndex
+          ? fullText.slice(htmlStartIndex, htmlEndIndex)
+          : fullText;
+
+      if (html.length < 100) {
+        console.warn("⚠️ HTML seems too short. Verify model output.");
+      }
 
       const s3Key = `${sessionId}.html`;
       console.log(`Uploading to s3://${BUCKET_NAME}/${s3Key}`);
