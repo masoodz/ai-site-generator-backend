@@ -1,4 +1,3 @@
-
 # AI Site Generator (Backend)
 
 This project implements a fully serverless backend that generates HTML websites from user prompts using Amazon Bedrock and stores them in S3. It includes secure user authentication via Amazon Cognito and exposes endpoints for generation and status checking via API Gateway.
@@ -7,23 +6,26 @@ This project implements a fully serverless backend that generates HTML websites 
 
 ## 🏗️ Architecture Overview
 
-- **Amazon API Gateway**: Public interface with Cognito Authorizer
+- **Amazon API Gateway**: Public interface with Cognito Authorizer and CORS restricted to your frontend
 - **AWS Lambda**:
   - `ApiHandler`: Receives user prompt and enqueues request
   - `SiteProcessor`: Consumes SQS messages, calls Bedrock, uploads HTML to S3
   - `StatusHandler`: Checks if generated site is ready in S3
-- **Amazon Bedrock**: Claude 3.5 Sonnet model for HTML generation
+- **Amazon Bedrock**: `us.deepseek.r1-v1:0` model for HTML generation
 - **Amazon SQS**: Decouples request from processing
 - **Amazon S3**: Stores generated HTML files
 - **Amazon Cognito**: Authenticates users
+- **Environment Variable**: `ALLOWED_ORIGIN` restricts requests to your deployed frontend domain
 
 ---
 
 ## 🚀 Deployment Instructions
 
 ### Prerequisites
+
 - AWS CLI and credentials configured
 - Node.js and AWS CDK installed
+- Your frontend URL ready (e.g. from Amplify)
 
 ### 1. Install dependencies
 
@@ -31,55 +33,64 @@ This project implements a fully serverless backend that generates HTML websites 
 npm install
 ```
 
-### 2. Bootstrap CDK (only once per account/region)
+### 2. Create `.env` file
+
+Create a `.env` file in your project root with your frontend domain:
+
+```env
+ALLOWED_ORIGIN=https://main.d2ut7n3rxzs0az.amplifyapp.com
+```
+
+> This value is used to configure CORS for S3 and API Gateway.
+
+### 3. Load `.env` in CDK
+
+Ensure the following exists at the top of `bin/app.ts`:
+
+```ts
+import * as dotenv from "dotenv";
+dotenv.config();
+```
+
+### 4. Bootstrap CDK (once per account/region)
 
 ```bash
 cdk bootstrap
 ```
 
-### 3. Deploy the stack
+### 5. Deploy the stack
 
 ```bash
 cdk deploy
 ```
 
-### 4. Outputs
+### 6. Outputs
 
 The stack outputs:
+
 - `ApiUrl`: Base URL for the REST API
 - `BucketName`: S3 bucket where HTML files are stored
-- `UserPoolId`: Cognito User Pool ID
-- `UserPoolClientId`: Cognito App Client ID
+- `IdentityPoolId`: Cognito Identity Pool ID
+- `AllowedOrigin`: Origin allowed by CORS (from `.env`)
 
 ---
 
 ## 🔐 Authentication
 
-All endpoints are protected with Cognito authentication.
+All endpoints are protected using IAM-based auth tied to Cognito Identity Pool (unauthenticated users).
 
-### Signing up users
-
-Users can sign up and log in using email and password. You can use AWS Amplify or Cognito-hosted UI for this.
-
-### Making authenticated API requests
-
-Once authenticated, send requests like:
-
-```bash
-curl -X POST https://<api-url>/generate \
-  -H "Authorization: <Cognito JWT token>" \
-  -H "Content-Type: application/json" \
-  -d '{ "prompt": "Build a portfolio site", "sessionId": "session-123" }'
-```
+The frontend uses the AWS SDK to assume the unauth role and sign requests.
 
 ---
 
 ## 🧪 Endpoints
 
 ### POST /generate
+
 Submits a site generation request.
 
 **Body:**
+
 ```json
 {
   "prompt": "Create a modern landing page",
@@ -88,6 +99,7 @@ Submits a site generation request.
 ```
 
 ### GET /status?sessionId=your-session-id
+
 Checks if the site is ready. If ready, returns:
 
 ```json
@@ -101,8 +113,8 @@ Checks if the site is ready. If ready, returns:
 
 ## 🧠 Model Used
 
-- **Model ID**: `anthropic.claude-3-5-sonnet-20240620-v1:0`
-- **Max Tokens**: 20000
+- **Model ID**: `us.deepseek.r1-v1:0`
+- **Max Tokens**: 20,000
 - **Temperature**: 0.7
 - **Image Sources**: Uses Pexels image links
 
@@ -128,6 +140,9 @@ lambda/
     getStatus.ts
 lib/
   ai-site-generator-stack.ts
+bin/
+  app.ts
+.env
 ```
 
 ---

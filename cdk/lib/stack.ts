@@ -13,7 +13,7 @@ export class AiSiteGeneratorStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    const allowedOrigin = "https://main.d2ut7n3rxzs0az.amplifyapp.com";
+    const allowedOrigin = process.env.ALLOWED_ORIGIN || "http://localhost:5173";
 
     const bucket = new s3.Bucket(this, "GeneratedSitesBucket", {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -191,5 +191,6 @@ export class AiSiteGeneratorStack extends cdk.Stack {
     new cdk.CfnOutput(this, "ApiUrl", { value: api.url });
     new cdk.CfnOutput(this, "BucketName", { value: bucket.bucketName });
     new cdk.CfnOutput(this, "IdentityPoolId", { value: identityPool.ref });
+    new cdk.CfnOutput(this, "AllowedOrigin", { value: allowedOrigin });
   }
 }

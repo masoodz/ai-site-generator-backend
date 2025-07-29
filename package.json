@@ -21,7 +21,8 @@
     "@aws-sdk/client-s3": "^3.850.0",
     "@aws-sdk/client-sqs": "^3.854.0",
     "aws-cdk-lib": "^2.207.0",
-    "constructs": "^10.4.2"
+    "constructs": "^10.4.2",
+    "dotenv": "^17.2.1"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.152",
