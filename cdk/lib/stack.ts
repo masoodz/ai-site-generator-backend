@@ -13,6 +13,8 @@ export class AiSiteGeneratorStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
+    const allowedOrigin = "https://main.d2ut7n3rxzs0az.amplifyapp.com";
+
     const bucket = new s3.Bucket(this, "GeneratedSitesBucket", {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
@@ -34,7 +36,7 @@ export class AiSiteGeneratorStack extends cdk.Stack {
     );
 
     bucket.addCorsRule({
-      allowedOrigins: ["*"],
+      allowedOrigins: [allowedOrigin],
       allowedMethods: [s3.HttpMethods.GET],
       allowedHeaders: ["*"],
     });
@@ -85,8 +87,8 @@ export class AiSiteGeneratorStack extends cdk.Stack {
 
     const api = new apigateway.RestApi(this, "SiteRequestApi", {
       defaultCorsPreflightOptions: {
-        allowOrigins: apigateway.Cors.ALL_ORIGINS,
-        allowMethods: apigateway.Cors.ALL_METHODS,
+        allowOrigins: [allowedOrigin],
+        allowMethods: ["GET", "POST", "OPTIONS"],
         allowHeaders: [
           "Content-Type",
           "Authorization",
@@ -114,7 +116,7 @@ export class AiSiteGeneratorStack extends cdk.Stack {
     api.addGatewayResponse("Default4xxWithCORS", {
       type: apigateway.ResponseType.DEFAULT_4XX,
       responseHeaders: {
-        "Access-Control-Allow-Origin": "'*'",
+        "Access-Control-Allow-Origin": `'${allowedOrigin}'`,
         "Access-Control-Allow-Headers": "'*'",
         "Access-Control-Allow-Methods": "'OPTIONS,POST,GET'",
       },
@@ -123,7 +125,7 @@ export class AiSiteGeneratorStack extends cdk.Stack {
     api.addGatewayResponse("Default5xxWithCORS", {
       type: apigateway.ResponseType.DEFAULT_5XX,
       responseHeaders: {
-        "Access-Control-Allow-Origin": "'*'",
+        "Access-Control-Allow-Origin": `'${allowedOrigin}'`,
         "Access-Control-Allow-Headers": "'*'",
         "Access-Control-Allow-Methods": "'OPTIONS,POST,GET'",
       },
@@ -140,25 +142,29 @@ export class AiSiteGeneratorStack extends cdk.Stack {
         },
         "sts:AssumeRoleWithWebIdentity"
       ),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName("AmazonAPIGatewayInvokeFullAccess"),
-      ],
     });
+
+    unauthRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ["execute-api:Invoke"],
+        resources: [
+          `arn:aws:execute-api:${this.region}:${this.account}:${api.restApiId}/*/POST/generate`,
+          `arn:aws:execute-api:${this.region}:${this.account}:${api.restApiId}/*/GET/status`,
+        ],
+      })
+    );
 
     const identityPool = new cdk.aws_cognito.CfnIdentityPool(this, "IdentityPool", {
       allowUnauthenticatedIdentities: true,
     });
 
-    const identityPoolRoleAttachment = new cdk.aws_cognito.CfnIdentityPoolRoleAttachment(
-      this,
-      "IdentityPoolRoleAttachment",
-      {
-        identityPoolId: identityPool.ref,
-        roles: {
-          unauthenticated: unauthRole.roleArn,
-        },
-      }
-    );
+    new cdk.aws_cognito.CfnIdentityPoolRoleAttachment(this, "IdentityPoolRoleAttachment", {
+      identityPoolId: identityPool.ref,
+      roles: {
+        unauthenticated: unauthRole.roleArn,
+      },
+    });
 
     unauthRole.assumeRolePolicy?.addStatements(
       new iam.PolicyStatement({
